@@ -568,13 +568,18 @@ function clearSearch() {
 function renderProducao(person) {
   var secoes = [
     {campo:'artigosCompletos',      titulo:'Artigos completos em periódicos'},
-    {campo:'livrosPublicados',      titulo:'Livros publicados/organizados'},
-    {campo:'orientacoesconcluidas', titulo:'Orientações concluídas'},
-    {campo:'participacaoEventos',   titulo:'Participação em eventos'},
+    {campo:'trabalhosCongresso',    titulo:'Trabalhos em anais de congressos'},
+    {campo:'livrosCapitulos',       titulo:'Livros e capítulos publicados'},
+    {campo:'patentesRegistros',     titulo:'Patentes e registros'},
+    {campo:'softwareRegistros',     titulo:'Software e registros de programa'},
+    {campo:'orientacoesConcluidas', titulo:'Orientações concluídas'},
+    {campo:'orientacoesAndamento',  titulo:'Orientações em andamento'},
     {campo:'premiosTitulos',        titulo:'Prêmios e títulos'},
-    {campo:'demaisProducaoTecnica', titulo:'Demais produções técnicas'},
-    {campo:'textosJornaisRevistas', titulo:'Textos em jornais/revistas'},
-    {campo:'entrevistasEPCTA',      titulo:'Entrevistas e mídia'},
+    {campo:'eventos',               titulo:'Participação em eventos'},
+    {campo:'bancas',                titulo:'Participação em bancas'},
+    {campo:'apresentacoes',         titulo:'Apresentações de trabalho'},
+    {campo:'producaoTecnica',       titulo:'Demais produções técnicas'},
+    {campo:'outrasInformacoes',     titulo:'Outras informações'},
   ];
   var lista = document.getElementById('producaoLista');
   lista.innerHTML = '';
