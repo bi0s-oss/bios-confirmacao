@@ -130,8 +130,9 @@ PESQUISADORES = [
     ("Weiler Alves Finamore",                      "8689372749422458"),
 ]
 
-OUTPUT_FILE = Path("scraped_completo.json")
-DELAY = 12  # segundos entre paginas
+OUTPUT_FILE  = Path("scraped_completo.json")
+HTML_DIR     = Path("html_cvs")          # HTMLs completos salvos aqui
+DELAY        = 12                         # segundos entre paginas
 
 # Mapa de anchor -> nome legivel da secao
 SECOES_CONHECIDAS = {
@@ -153,6 +154,56 @@ SECOES_CONHECIDAS = {
     "OutrasInformacoes":             "outras_informacoes",
     "InformacoesCandidato":          "informacoes_candidato",
 }
+
+
+def salvar_html(id_lattes, html):
+    """Salva o HTML bruto do CV para reprocessamento futuro."""
+    HTML_DIR.mkdir(exist_ok=True)
+    path = HTML_DIR / f"{id_lattes}.html"
+    path.write_text(html, encoding="utf-8")
+
+
+def extrair_metadados(soup):
+    """Extrai dados gerais: nome completo, ultima atualizacao, areas de atuacao, formacao."""
+    meta = {}
+
+    # Nome completo
+    for sel in ["h2.nome", "h1", "div#nome", "span.nome"]:
+        el = soup.select_one(sel)
+        if el:
+            txt = el.get_text(strip=True)
+            if txt and len(txt) > 3:
+                meta["nome_completo"] = txt
+                break
+
+    # Ultima atualizacao
+    for el in soup.find_all(string=re.compile(r"[Uu]ltima.*[Aa]tualiz")):
+        parent = el.parent
+        if parent:
+            txt = parent.get_text(strip=True)
+            meta["ultima_atualizacao"] = txt
+            break
+
+    # Areas de atuacao
+    areas = []
+    anchor_areas = soup.find("a", attrs={"name": re.compile(r"[Aa]reas|[Aa]rea")})
+    if anchor_areas:
+        parent = anchor_areas.find_parent("div")
+        if parent:
+            for div in parent.find_all("div", class_=re.compile(r"layout-cell")):
+                txt = div.get_text(separator=" ", strip=True)
+                txt = re.sub(r"\s+", " ", txt).strip()
+                if txt and len(txt) > 5 and txt not in areas:
+                    areas.append(txt)
+    if areas:
+        meta["areas_atuacao"] = areas
+
+    # Resumo / texto da bio
+    resumo_el = soup.find("div", id="resumo")
+    if resumo_el:
+        meta["resumo"] = re.sub(r"\s+", " ", resumo_el.get_text(strip=True))
+
+    return meta
 
 
 def carregar_progresso():
@@ -244,15 +295,18 @@ def scrape_cv(driver, nome, id_lattes):
     html = driver.page_source
     soup = BeautifulSoup(html, "html.parser")
 
-    secoes = extrair_todas_secoes(soup)
+    # Salva HTML completo para reprocessamento futuro
+    salvar_html(id_lattes, html)
 
-    # Conta total de itens
-    total = sum(len(v) for v in secoes.values())
+    secoes  = extrair_todas_secoes(soup)
+    metadados = extrair_metadados(soup)
+    total   = sum(len(v) for v in secoes.values())
 
     return {
-        "id": id_lattes,
-        "nome": nome,
-        "secoes": secoes,
+        "id":          id_lattes,
+        "nome":        nome,
+        "metadados":   metadados,
+        "secoes":      secoes,
         "total_itens": total,
     }
 
