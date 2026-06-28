@@ -357,7 +357,7 @@
 
 var DB = [];
 var _dbLoaded = false;
-fetch('db.json')
+fetch('db.json?v=' + Date.now())
   .then(function(r){ return r.json(); })
   .then(function(data){
     DB = data;
