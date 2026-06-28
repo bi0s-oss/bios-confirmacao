@@ -170,6 +170,18 @@
     padding: 2px 7px; border-radius: 3px; margin-top: 6px;
   }
 
+  .trilha-panel {
+    display: none;
+    padding: 2px 16px 14px 52px;
+    border-top: 1px solid var(--border);
+  }
+  .project-item.checked .trilha-panel { display: block; }
+  .trilha-panel-label { font-size: 12px; color: var(--sub); margin: 10px 0 8px; font-weight: 600; }
+  .trilha-group { margin-bottom: 10px; }
+  .trilha-group-title { font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+  .trilha-linha { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); padding: 3px 0; cursor: pointer; }
+  .trilha-linha input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; flex-shrink: 0; }
+
   .sticky-bottom {
     position: fixed; bottom: 0; left: 0; right: 0;
     background: rgba(245,242,236,0.95); backdrop-filter: blur(8px);
@@ -239,11 +251,29 @@
   }
   .producao-body.open { display: block; }
   .producao-item {
-    padding: 10px 18px; font-size: 13px; color: var(--text);
+    font-size: 13px; color: var(--text);
     border-bottom: 1px solid var(--border); line-height: 1.5;
   }
   .producao-item:last-child { border-bottom: none; }
-  .producao-item-num { color: var(--sub); font-size: 11px; margin-right: 6px; }
+  .producao-item-inner {
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+    padding: 10px 18px; transition: background 0.1s;
+  }
+  .producao-item-inner:hover { background: #f7faf8; }
+  .producao-item.checked .producao-item-inner { background: #f0f8f4; }
+  .producao-item .trilha-panel { padding-left: 44px; }
+  .producao-item.checked .trilha-panel { display: block; }
+  .producao-item-num { color: var(--sub); font-size: 11px; flex-shrink: 0; margin-top: 2px; }
+  .producao-item-text { flex: 1; }
+  .check-box-sm {
+    width: 16px; height: 16px; border: 2px solid var(--border);
+    border-radius: 4px; flex-shrink: 0; margin-top: 2px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, border-color 0.15s; background: #fff;
+  }
+  .producao-item.checked .check-box-sm { background: var(--accent); border-color: var(--accent); }
+  .check-box-sm svg { opacity: 0; transition: opacity 0.1s; }
+  .producao-item.checked .check-box-sm svg { opacity: 1; }
   .producao-empty { padding: 16px 18px; font-size: 13px; color: var(--sub); font-style: italic; }
 
 </style>
@@ -345,13 +375,78 @@ function initials(name) {
 }
 
 
+var TRILHAS = [
+  { trilha: 'Saúde', linhas: [
+      'Predição de risco e reconhecimento de padrões baseado na análise de dados',
+      'Apoio ao diagnóstico baseado em imagem',
+      'Interface humano-máquina',
+      'Apoio à decisão para sistemas de saúde',
+      'Descoberta de medicamentos',
+      'Modelamento epidemiológico',
+      'Planejamento da saúde',
+  ]},
+  { trilha: 'Método', linhas: [
+      'Aprendizado de máquina para processamento de sinais e imagens',
+      'Aprendizado de máquina e pesquisa operacional',
+      'Ferramentas matemáticas estatísticas avançadas de IA',
+      'Igualdade, responsabilidade, tranparência e ética em IA',
+      'IA e sociedade',
+  ]},
+  { trilha: 'Agro', linhas: [
+      'Aquisição de dados para monitoramento agrícola e ambiental no curto-prazo',
+      'Agricultura de precisão',
+      'Pecuária de precisão',
+      'Automação e robótica na agricultura',
+      'Impactos da mudança climática na agricultura nacional',
+      'Métodos de monitoramento agrícola e ambiental e planejamento de safra',
+  ]},
+  { trilha: 'Eixo transversal', linhas: [
+      'Poluição',
+      'Mudança climática',
+      'Rastreabilidade de alimentos',
+      'Serviços para o Ecosistema',
+      'Expossona',
+  ]},
+];
+
+const SECOES_PRODUCAO = [
+  {campo:'artigosCompletos',      titulo:'Artigos completos em periódicos'},
+  {campo:'trabalhosCongresso',    titulo:'Trabalhos em anais de congressos'},
+  {campo:'livrosCapitulos',       titulo:'Livros e capítulos publicados'},
+  {campo:'patentesRegistros',     titulo:'Patentes e registros'},
+  {campo:'softwareRegistros',     titulo:'Software e registros de programa'},
+  {campo:'orientacoesConcluidas', titulo:'Orientações concluídas'},
+  {campo:'orientacoesAndamento',  titulo:'Orientações em andamento'},
+  {campo:'premiosTitulos',        titulo:'Prêmios e títulos'},
+  {campo:'eventos',               titulo:'Participação em eventos'},
+  {campo:'bancas',                titulo:'Participação em bancas'},
+  {campo:'apresentacoes',         titulo:'Apresentações de trabalho'},
+  {campo:'producaoTecnica',       titulo:'Demais produções técnicas'},
+  {campo:'outrasInformacoes',     titulo:'Outras informações'},
+];
+
 let person = null;
 let selectedProjIds = new Set();
-let selectedProdIds  = new Set();
-let selectedOrientIds = new Set();
+let selectedProducao = {}; // campo -> Set de indices selecionados
+let selectedTrilhas = new Map(); // idx do projeto -> Set de "trilha|||linha"
+let selectedProdTrilhas = new Map(); // "campo|||idx" -> Set de "trilha|||linha"
+
+function trilhaPanelHtml(label) {
+  return '<div class="trilha-panel-label">' + label + '</div>'
+    + TRILHAS.map(g => `
+        <div class="trilha-group">
+          <div class="trilha-group-title">${g.trilha}</div>
+          ${g.linhas.map(linha => `
+            <label class="trilha-linha">
+              <input type="checkbox" data-trilha="${g.trilha}" data-linha="${linha}">
+              <span>${linha}</span>
+            </label>`).join('')}
+        </div>`).join('');
+}
 
 function updateCounter() {
-  const total = selectedProjIds.size + selectedProdIds.size + selectedOrientIds.size;
+  let total = selectedProjIds.size;
+  for (const campo in selectedProducao) total += selectedProducao[campo].size;
   document.getElementById('selectedCount').textContent =
     `${total} selecionado${total !== 1 ? 's' : ''}`;
 }
@@ -372,7 +467,7 @@ function render() {
 
   const nProj = person.projetos.length;
   const nArtigos = (person.artigosCompletos || []).length;
-  const nOrient = (person.orientacoesconcluidas || []).length;
+  const nOrient = (person.orientacoesConcluidas || []).length;
   document.getElementById('personMeta').textContent =
     `${nProj} projetos · ${nArtigos} artigos · ${nOrient} orientações`;
   document.getElementById('totalCount').textContent =
@@ -396,31 +491,21 @@ function render() {
           <div class="project-title">${proj.titulo}</div>
           <div class="project-periodo">${proj.periodo}</div>
         </div>
+      </div>
+      <div class="trilha-panel">
+        ${trilhaPanelHtml('Trilha / Linha deste projeto (pode marcar mais de uma):')}
       </div>`;
-    div.addEventListener('click', () => toggleProj(div, idx));
+    div.querySelector('.project-inner').addEventListener('click', () => toggleProj(div, idx));
+    div.querySelector('.trilha-panel').addEventListener('click', e => e.stopPropagation());
+    div.querySelectorAll('.trilha-panel input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', () => toggleTrilha(idx, cb.dataset.trilha, cb.dataset.linha, cb.checked));
+    });
     projList.appendChild(div);
   });
 
   document.getElementById('personContent').style.display = 'block';
   document.getElementById('stickyBar').style.display = 'flex';
   renderProducao(person);
-}
-
-function makeProdItem(txt, idx, tipo) {
-  const div = document.createElement('div');
-  div.className = 'prod-item-wrap';
-  div.dataset.idx = idx;
-  div.innerHTML = `
-    <div class="prod-item-inner">
-      <div class="check-box">
-        <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-          <path d="M1 5L4.5 8.5L11 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <div class="prod-text">${txt}</div>
-    </div>`;
-  div.addEventListener('click', () => toggleProd(div, idx, tipo));
-  return div;
 }
 
 function toggleProj(el, idx) {
@@ -443,8 +528,23 @@ function toggleProj(el, idx) {
   updateCounter();
 }
 
-function toggleProd(el, idx, tipo) {
-  const set = tipo === 'prod' ? selectedProdIds : selectedOrientIds;
+function toggleTrilha(projIdx, trilha, linha, checked) {
+  if (!selectedTrilhas.has(projIdx)) selectedTrilhas.set(projIdx, new Set());
+  const set = selectedTrilhas.get(projIdx);
+  const key = trilha + '|||' + linha;
+  if (checked) set.add(key); else set.delete(key);
+}
+
+function toggleProdTrilha(key, trilha, linha, checked) {
+  if (!selectedProdTrilhas.has(key)) selectedProdTrilhas.set(key, new Set());
+  const set = selectedProdTrilhas.get(key);
+  const tKey = trilha + '|||' + linha;
+  if (checked) set.add(tKey); else set.delete(tKey);
+}
+
+function toggleProducaoItem(el, campo, idx) {
+  if (!selectedProducao[campo]) selectedProducao[campo] = new Set();
+  const set = selectedProducao[campo];
   if (set.has(idx)) {
     set.delete(idx);
     el.classList.remove('checked');
@@ -457,13 +557,15 @@ function toggleProd(el, idx, tipo) {
 
 function clearAll() {
   selectedProjIds.clear();
-  selectedProdIds.clear();
-  selectedOrientIds.clear();
-  document.querySelectorAll('.project-item.checked, .prod-item-wrap.checked').forEach(el => {
+  selectedProducao = {};
+  selectedTrilhas.clear();
+  selectedProdTrilhas.clear();
+  document.querySelectorAll('.project-item.checked, .producao-item.checked').forEach(el => {
     el.classList.remove('checked');
     const tag = el.querySelector('.bios-tag');
     if (tag) tag.remove();
   });
+  document.querySelectorAll('.trilha-panel input[type=checkbox]:checked').forEach(cb => { cb.checked = false; });
   document.getElementById('selectedCount').textContent = '0 selecionados';
 }
 
@@ -491,30 +593,62 @@ function sendEmail() {
     return;
   }
 
-  const projetos  = [...selectedProjIds].sort((a,b)=>a-b).map(i => person.projetos[i]);
-  const producoes = [...selectedProdIds].sort((a,b)=>a-b).map(i => (person.producoes||[])[i]);
-  const orientacoes = [...selectedOrientIds].sort((a,b)=>a-b).map(i => (person.orientacoes||[])[i]);
+  const parseTrilhas = keys => keys.map(k => {
+    const [trilha, linha] = k.split('|||');
+    return { trilha, linha };
+  });
+
+  const projetos = [...selectedProjIds].sort((a,b)=>a-b).map(i => ({
+    titulo: person.projetos[i].titulo,
+    periodo: person.projetos[i].periodo,
+    trilhas: parseTrilhas([...(selectedTrilhas.get(i) || [])]),
+  }));
+
+  const producoes = [];
+  SECOES_PRODUCAO.forEach(sec => {
+    const set = selectedProducao[sec.campo];
+    if (!set || set.size === 0) return;
+    [...set].sort((a,b)=>a-b).forEach(idx => {
+      const key = sec.campo + '|||' + idx;
+      producoes.push({
+        campo: sec.campo,
+        categoria: sec.titulo,
+        texto: person[sec.campo][idx],
+        trilhas: parseTrilhas([...(selectedProdTrilhas.get(key) || [])]),
+      });
+    });
+  });
 
   let message = '';
 
   if (projetos.length > 0) {
     message += '=== PROJETOS ===\n';
-    message += projetos.map((p,i) => `${i+1}. [${p.periodo}] ${p.titulo}`).join('\n');
+    message += projetos.map((item,i) => {
+      const trilhasTxt = item.trilhas.length > 0
+        ? item.trilhas.map(t => `${t.trilha} — ${t.linha}`).join('; ')
+        : '(não informado)';
+      return `${i+1}. [${item.periodo}] ${item.titulo}\n   Trilha/Linha: ${trilhasTxt}`;
+    }).join('\n');
   } else {
     message += '=== PROJETOS ===\n(nenhum selecionado)';
   }
 
-  if (producoes.length > 0) {
-    message += '\n\n=== PRODUÇÕES ===\n';
-    message += producoes.map((p,i) => `${i+1}. ${p}`).join('\n');
-  }
+  const porCategoria = {};
+  producoes.forEach(p => (porCategoria[p.categoria] = porCategoria[p.categoria] || []).push(p));
+  Object.keys(porCategoria).forEach(categoria => {
+    message += `\n\n=== ${categoria.toUpperCase()} ===\n`;
+    message += porCategoria[categoria].map((p,i) => {
+      const trilhasTxt = p.trilhas.length > 0
+        ? p.trilhas.map(t => `${t.trilha} — ${t.linha}`).join('; ')
+        : '(não informado)';
+      return `${i+1}. ${p.texto}\n   Trilha/Linha: ${trilhasTxt}`;
+    }).join('\n');
+  });
 
-  if (orientacoes.length > 0) {
-    message += '\n\n=== ORIENTAÇÕES ===\n';
-    message += orientacoes.map((o,i) => `${i+1}. ${o}`).join('\n');
-  }
+  if (!projetos.length && !producoes.length) message = '(nada selecionado)';
 
-  if (!message) message = '(nada selecionado)';
+  const jsonPayload = { id: person.id, nome: person.nome, projetos, producoes };
+  message += '\n\n---JSON---\n' + JSON.stringify(jsonPayload, null, 2) + '\n---FIM-JSON---';
 
   setLoading(true);
 
@@ -566,26 +700,11 @@ function clearSearch() {
 }
 
 function renderProducao(person) {
-  var secoes = [
-    {campo:'artigosCompletos',      titulo:'Artigos completos em periódicos'},
-    {campo:'trabalhosCongresso',    titulo:'Trabalhos em anais de congressos'},
-    {campo:'livrosCapitulos',       titulo:'Livros e capítulos publicados'},
-    {campo:'patentesRegistros',     titulo:'Patentes e registros'},
-    {campo:'softwareRegistros',     titulo:'Software e registros de programa'},
-    {campo:'orientacoesConcluidas', titulo:'Orientações concluídas'},
-    {campo:'orientacoesAndamento',  titulo:'Orientações em andamento'},
-    {campo:'premiosTitulos',        titulo:'Prêmios e títulos'},
-    {campo:'eventos',               titulo:'Participação em eventos'},
-    {campo:'bancas',                titulo:'Participação em bancas'},
-    {campo:'apresentacoes',         titulo:'Apresentações de trabalho'},
-    {campo:'producaoTecnica',       titulo:'Demais produções técnicas'},
-    {campo:'outrasInformacoes',     titulo:'Outras informações'},
-  ];
   var lista = document.getElementById('producaoLista');
   lista.innerHTML = '';
   var temAlgo = false;
-  for (var s = 0; s < secoes.length; s++) {
-    var sec = secoes[s];
+  for (var s = 0; s < SECOES_PRODUCAO.length; s++) {
+    var sec = SECOES_PRODUCAO[s];
     var items = person[sec.campo] || [];
     if (items.length === 0) continue;
     temAlgo = true;
@@ -601,9 +720,29 @@ function renderProducao(person) {
     body.id = 'sec_' + sec.campo;
     var bodyHtml = '';
     for (var i = 0; i < items.length; i++) {
-      bodyHtml += '<div class="producao-item"><span class="producao-item-num">' + (i+1) + '.</span>' + items[i] + '</div>';
+      bodyHtml += '<div class="producao-item" data-campo="' + sec.campo + '" data-idx="' + i + '">'
+        + '<div class="producao-item-inner">'
+        + '<div class="check-box-sm"><svg width="9" height="8" viewBox="0 0 12 10" fill="none">'
+        + '<path d="M1 5L4.5 8.5L11 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>'
+        + '<span class="producao-item-num">' + (i+1) + '.</span>'
+        + '<span class="producao-item-text">' + items[i] + '</span>'
+        + '</div>'
+        + '<div class="trilha-panel">' + trilhaPanelHtml('Trilha / Linha deste item (pode marcar mais de uma):') + '</div>'
+        + '</div>';
     }
     body.innerHTML = bodyHtml;
+    body.addEventListener('click', function(e) {
+      var inner = e.target.closest('.producao-item-inner');
+      if (!inner) return;
+      var itemEl = inner.closest('.producao-item');
+      toggleProducaoItem(itemEl, itemEl.dataset.campo, parseInt(itemEl.dataset.idx, 10));
+    });
+    body.addEventListener('change', function(e) {
+      if (!e.target.matches('.trilha-panel input[type=checkbox]')) return;
+      var itemEl = e.target.closest('.producao-item');
+      var key = itemEl.dataset.campo + '|||' + itemEl.dataset.idx;
+      toggleProdTrilha(key, e.target.dataset.trilha, e.target.dataset.linha, e.target.checked);
+    });
     (function(h, b) {
       h.addEventListener('click', function() { toggleSecao(h, b); });
     })(header, body);
