@@ -1,17 +1,19 @@
 """
-Regenera db.json (usado pelo site) a partir dos HTMLs em html_cvs/ e das abas
-de Piloto_att.xlsx.
+Regenera db.json (usado pelo site) a partir das abas de Piloto_att.xlsx.
 
-Faz 4 coisas:
+Projetos e produção (artigos, bancas, anais, orientações etc.) vêm
+exclusivamente do Piloto_att.xlsx - não mais do raspado de html_cvs/.
+Decisão do Tiago: a planilha foi limpa e passou a ser a fonte única,
+mesmo cobrindo bem menos itens por pesquisador do que o Lattes completo.
+A extração antiga a partir do HTML (extrair_cv_db, carregar_projetos_atuais)
+foi mantida no arquivo, só sem uso, caso seja necessário voltar atrás -
+o db.json anterior (raspado do Lattes + Piloto) está salvo em
+db_full_lattes_backup.json.
+
+Continua fazendo:
   1. Remove pesquisadores que saíram do BI0S (EXCLUIR_IDS).
-  2. Extrai produção/orientações/bancas/etc. dos HTMLs, já nos nomes de campo
-     que index.html (renderProducao) espera.
-  3. Atualiza "projetos" a partir da aba Projetos de Piloto_att.xlsx.
-  4. Acrescenta às categorias de produção os itens mais recentes cadastrados
-     manualmente nas abas de produção de Piloto_att.xlsx (Artigos, Livros,
-     Capítulos, Trabalhos em anais, Patentes, Software, Produção técnica,
-     Bancas, Orientações, Eventos, Prêmios) - essas abas têm itens de
-     2025/2026 que ainda não estão nos HTMLs salvos.
+  2. Usa html_cvs/ só para saber quais IDs existem e (se a planilha não
+     tiver a data) pegar a "última atualização" de cada Lattes.
 """
 import json
 import re
@@ -140,6 +142,14 @@ def normalizar_nome(s):
 
 NOME_PARA_ID = {normalizar_nome(nome): id_ for id_, nome in gt.PESQUISADORES.items()}
 
+# campos de producao que index.html (renderProducao) espera. apresentacoes
+# e outrasInformacoes nao tem aba correspondente no Piloto, ficam sempre [].
+CAMPOS_PRODUCAO = [
+    "artigosCompletos", "trabalhosCongresso", "livrosCapitulos", "patentesRegistros",
+    "softwareRegistros", "orientacoesConcluidas", "orientacoesAndamento", "premiosTitulos",
+    "eventos", "bancas", "producaoTecnica", "apresentacoes",
+]
+
 # aba do Piloto -> campo de db.json (Livros e Capítulos caem no mesmo campo)
 SHEET_PARA_CAMPO = {
     "Artigos em periódicos": "artigosCompletos",
@@ -239,14 +249,13 @@ def carregar_projetos_atuais():
 
 def main():
     projetos_por_id, ultima_at_por_id = carregar_projetos()
-    projetos_atuais_por_id = carregar_projetos_atuais()
     producao_piloto_por_id = carregar_producao_piloto()
     htmls = sorted(HTML_DIR.glob("*.html"))
 
     resultado = []
     excluidos = []
     sem_projeto_na_planilha = []
-    adicionados_piloto = {}
+    sem_producao_na_planilha = []
 
     for html_path in htmls:
         id_lattes = html_path.stem
@@ -257,19 +266,17 @@ def main():
         nome = gt.PESQUISADORES.get(id_lattes, "ID_" + id_lattes)
         print("  " + nome)
 
-        cats = extrair_cv_db(html_path)
-
         extra = producao_piloto_por_id.get(id_lattes, {})
-        for campo, novos_itens in extra.items():
-            antes = len(cats.get(campo, []))
-            cats[campo] = dedup(cats.get(campo, []) + novos_itens)
-            adicionados_piloto[campo] = adicionados_piloto.get(campo, 0) + (len(cats[campo]) - antes)
+        cats = {campo: dedup(extra.get(campo, [])) for campo in CAMPOS_PRODUCAO}
+        cats["outrasInformacoes"] = []
+        if not extra:
+            sem_producao_na_planilha.append(nome)
 
         if id_lattes in projetos_por_id:
             projetos = dedup_projetos(projetos_por_id[id_lattes])
         else:
             sem_projeto_na_planilha.append(nome)
-            projetos = projetos_atuais_por_id.get(id_lattes, [])
+            projetos = []
 
         ultima_at = ultima_at_por_id.get(id_lattes, "")
         if not ultima_at:
@@ -293,9 +300,9 @@ def main():
 
     print("\nExcluidos (%d): %s" % (len(excluidos), excluidos))
     print("Salvos: %d pesquisadores em %s" % (len(resultado), OUTPUT_FILE))
-    print("\nItens novos incorporados do Piloto_att.xlsx (apos dedup):")
-    for campo, qtd in sorted(adicionados_piloto.items()):
-        print("  %s: +%d" % (campo, qtd))
+    print("\nSem nenhuma linha de producao no Piloto_att.xlsx (%d):" % len(sem_producao_na_planilha))
+    for n in sem_producao_na_planilha:
+        print("  - " + n)
     if sem_projeto_na_planilha:
         print("\nSem projetos na aba 'Projetos' do Piloto_att.xlsx (%d) - ficaram com projetos=[]:" % len(sem_projeto_na_planilha))
         for n in sem_projeto_na_planilha:
