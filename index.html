@@ -276,6 +276,26 @@
   .producao-item.checked .check-box-sm svg { opacity: 1; }
   .producao-empty { padding: 16px 18px; font-size: 13px; color: var(--sub); font-style: italic; }
 
+  /* EDC */
+  .edc-section { margin-top: 32px; }
+  .edc-intro { font-size: 13px; color: var(--sub); margin: 6px 0 16px; line-height: 1.5; }
+  .edc-atividades { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 24px; }
+  .edc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .edc-row:last-child { border-bottom: none; }
+  .edc-row-labels { flex: 1; }
+  .edc-cat { font-size: 11px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; display: block; margin-bottom: 2px; }
+  .edc-desc { font-size: 13px; color: var(--text); line-height: 1.4; }
+  .edc-simNao { display: flex; gap: 6px; flex-shrink: 0; }
+  .edc-btn { padding: 5px 14px; border-radius: 20px; border: 1.5px solid var(--border); background: transparent; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--sub); transition: all .15s; }
+  .edc-btn.active-sim { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .edc-btn.active-nao { background: #e8e2d8; border-color: #c8c0b4; color: var(--text); }
+  .edc-question-block { margin-bottom: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .edc-question-label { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 12px; line-height: 1.4; }
+  .edc-option { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text); padding: 5px 0; cursor: pointer; line-height: 1.4; }
+  .edc-option input { margin-top: 2px; accent-color: var(--accent); flex-shrink: 0; }
+  .edc-outro-wrap { margin-top: 8px; padding-left: 24px; }
+  .edc-outro-input { width: 100%; max-width: 420px; padding: 7px 10px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--bg); color: var(--text); }
+
 </style>
 </head>
 <body>
@@ -335,6 +355,13 @@
     <div class="producao-section" id="producaoSection" style="display:none">
       <h3 style="font-family:'DM Serif Display',serif;font-size:18px;margin:32px 0 12px;color:var(--accent)">Produção Científica</h3>
       <div id="producaoLista"></div>
+    </div>
+
+    <div class="edc-section" id="edcSection" style="display:none">
+      <h3 style="font-family:'DM Serif Display',serif;font-size:18px;margin:32px 0 4px;color:var(--accent)">Educação e Difusão do Conhecimento (EDC)</h3>
+      <p class="edc-intro">No período de Set/2025 a Ago/2026, você participou ou realizou alguma das atividades abaixo?</p>
+      <div class="edc-atividades" id="edcAtividadesBox"></div>
+      <div id="edcQuestoes"></div>
     </div>
 
 </div>
@@ -425,11 +452,48 @@ const SECOES_PRODUCAO = [
   {campo:'outrasInformacoes',     titulo:'Outras informações'},
 ];
 
+const EDC_ATIVIDADES = [
+  { key: 'midia',      cat: 'Mídia',                        desc: 'Aparições em podcasts, rádio, TV, jornais ou revistas' },
+  { key: 'textos',     cat: 'Textos de divulgação',         desc: 'Publicação de colunas, blogs, artigos de opinião ou newsletters' },
+  { key: 'ensino',     cat: 'Ensino/capacitação',           desc: 'Estruturação ou ministração de cursos, workshops ou oficinas (extensão universitária, cursos livres, ensino básico/médio, capacitação profissional)' },
+  { key: 'eventos',    cat: 'Eventos públicos',             desc: 'Palestras, mesas-redondas, debates ou mediações para público não especialista' },
+  { key: 'digital',    cat: 'Conteúdo digital',             desc: 'Produção de vídeos, threads, posts educativos ou séries de divulgação em plataformas digitais' },
+  { key: 'parcerias',  cat: 'Parcerias interinstitucionais',desc: 'Atividades de educação e difusão do conhecimento em parceria com outras instituições (nacionais ou internacionais)' },
+  { key: 'politicas',  cat: 'Políticas públicas',           desc: 'Pareceres técnicos, audiências públicas ou conselhos' },
+];
+const EDC_IMPACTO_OPTS = [
+  'Alto – amplo alcance e engajamento do público',
+  'Médio – alcance moderado com bom engajamento',
+  'Baixo – atividade exploratória ou alcance reduzido',
+  'Não realizei atividades de EDC neste período',
+  'Não consigo avaliar',
+];
+const EDC_DESAFIOS_OPTS = [
+  'Falta de tempo',
+  'Falta de apoio institucional',
+  'Falta de recursos financeiros',
+  'Dificuldade de acesso a veículos de comunicação',
+  'Desconhecimento de como iniciar',
+  'Não houve desafios significativos',
+  'Outro',
+];
+const EDC_CAPACITACAO_OPTS = [
+  'Sim, com urgência',
+  'Sim, futuramente',
+  'Não, já tenho experiência suficiente',
+  'Não tenho interesse',
+];
+
 let person = null;
 let selectedProjIds = new Set();
 let selectedProducao = {}; // campo -> Set de indices selecionados
 let selectedTrilhas = new Map(); // idx do projeto -> Set de "trilha|||linha"
 let selectedProdTrilhas = new Map(); // "campo|||idx" -> Set de "trilha|||linha"
+let edcAtividades = {}; // key -> 'sim' | 'nao'
+let edcImpacto = '';
+let edcDesafios = new Set();
+let edcDesafiosOutro = '';
+let edcCapacitacao = '';
 
 function trilhaPanelHtml(label) {
   return '<div class="trilha-panel-label">' + label + '</div>'
@@ -506,6 +570,7 @@ function render() {
   document.getElementById('personContent').style.display = 'block';
   document.getElementById('stickyBar').style.display = 'flex';
   renderProducao(person);
+  renderEDC();
 }
 
 function toggleProj(el, idx) {
@@ -567,6 +632,11 @@ function clearAll() {
   });
   document.querySelectorAll('.trilha-panel input[type=checkbox]:checked').forEach(cb => { cb.checked = false; });
   document.getElementById('selectedCount').textContent = '0 selecionados';
+  // EDC
+  edcAtividades = {}; edcImpacto = ''; edcDesafios = new Set(); edcDesafiosOutro = ''; edcCapacitacao = '';
+  document.querySelectorAll('.edc-btn').forEach(b => b.classList.remove('active-sim','active-nao'));
+  document.querySelectorAll('#edcQuestoes input').forEach(i => { i.checked = false; if (i.type==='text') i.value=''; });
+  var ow = document.getElementById('edcOutroWrap'); if (ow) ow.style.display = 'none';
 }
 
 function showToast(msg, type) {
@@ -647,7 +717,21 @@ function sendEmail() {
 
   if (!projetos.length && !producoes.length) message = '(nada selecionado)';
 
-  const jsonPayload = { id: person.id, nome: person.nome, projetos, producoes };
+  // EDC
+  const edcAtivList = EDC_ATIVIDADES.map(a => ({ key: a.key, categoria: a.cat, resposta: edcAtividades[a.key] || null }));
+  const edcDesafiosList = [...edcDesafios].map(d => d === 'Outro' && edcDesafiosOutro ? 'Outro: ' + edcDesafiosOutro : d);
+  const edc = { atividades: edcAtivList, impacto: edcImpacto || null, desafios: edcDesafiosList, capacitacao: edcCapacitacao || null };
+
+  const temEDC = edcAtivList.some(a => a.resposta) || edcImpacto || edcDesafios.size || edcCapacitacao;
+  if (temEDC) {
+    message += '\n\n=== EDUCAÇÃO E DIFUSÃO DO CONHECIMENTO (EDC) ===\n';
+    edcAtivList.forEach(a => { if (a.resposta) message += `${a.categoria}: ${a.resposta.toUpperCase()}\n`; });
+    if (edcImpacto) message += `\nAvaliação de impacto: ${edcImpacto}`;
+    if (edcDesafiosList.length) message += `\nDesafios: ${edcDesafiosList.join('; ')}`;
+    if (edcCapacitacao) message += `\nInteresse em capacitação BI0S: ${edcCapacitacao}`;
+  }
+
+  const jsonPayload = { id: person.id, nome: person.nome, projetos, producoes, edc };
   message += '\n\n---JSON---\n' + JSON.stringify(jsonPayload, null, 2) + '\n---FIM-JSON---';
 
   setLoading(true);
@@ -757,6 +841,82 @@ function toggleSecao(header, body) {
   var isOpen = body.classList.contains('open');
   body.classList.toggle('open', !isOpen);
   header.classList.toggle('open', !isOpen);
+}
+
+function renderEDC() {
+  document.getElementById('edcSection').style.display = 'block';
+
+  // Atividades Sim/Não
+  var box = document.getElementById('edcAtividadesBox');
+  box.innerHTML = EDC_ATIVIDADES.map(function(a) {
+    return '<div class="edc-row" data-key="' + a.key + '">'
+      + '<div class="edc-row-labels">'
+      + '<span class="edc-cat">' + a.cat + '</span>'
+      + '<span class="edc-desc">' + a.desc + '</span>'
+      + '</div>'
+      + '<div class="edc-simNao">'
+      + '<button class="edc-btn" data-key="' + a.key + '" data-val="sim">Sim</button>'
+      + '<button class="edc-btn" data-key="' + a.key + '" data-val="nao">Não</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+  box.addEventListener('click', function(e) {
+    var btn = e.target.closest('.edc-btn');
+    if (!btn) return;
+    var key = btn.dataset.key, val = btn.dataset.val;
+    edcAtividades[key] = val;
+    box.querySelectorAll('.edc-btn[data-key="' + key + '"]').forEach(function(b) {
+      b.classList.remove('active-sim', 'active-nao');
+      if (b.dataset.val === val) b.classList.add(val === 'sim' ? 'active-sim' : 'active-nao');
+    });
+  });
+
+  // Questões
+  var questoes = document.getElementById('edcQuestoes');
+  questoes.innerHTML =
+    makeRadioBlock('edcImpacto', 'Como você avalia o impacto geral das suas atividades de Educação e Difusão do Conhecimento no período?', EDC_IMPACTO_OPTS)
+    + makeCheckBlock('edcDesafios', 'Quais foram os principais desafios para realizar atividades de EDC no período?', EDC_DESAFIOS_OPTS)
+    + makeRadioBlock('edcCapacitacao', 'Você teria interesse em receber capacitação ou apoio do BI0S para atividades de EDC?', EDC_CAPACITACAO_OPTS);
+
+  questoes.querySelector('[name="edcImpacto"]') && questoes.querySelectorAll('[name="edcImpacto"]').forEach(function(r) {
+    r.addEventListener('change', function() { edcImpacto = r.value; });
+  });
+  questoes.querySelectorAll('[name="edcDesafios"]').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      if (cb.value === 'Outro') {
+        document.getElementById('edcOutroWrap').style.display = cb.checked ? 'block' : 'none';
+        if (!cb.checked) { edcDesafiosOutro = ''; document.getElementById('edcOutroText').value = ''; }
+      }
+      if (cb.checked) edcDesafios.add(cb.value); else edcDesafios.delete(cb.value);
+    });
+  });
+  var outroText = questoes.querySelector('#edcOutroText');
+  if (outroText) outroText.addEventListener('input', function() { edcDesafiosOutro = outroText.value; });
+  questoes.querySelectorAll('[name="edcCapacitacao"]').forEach(function(r) {
+    r.addEventListener('change', function() { edcCapacitacao = r.value; });
+  });
+}
+
+function makeRadioBlock(name, question, opts) {
+  return '<div class="edc-question-block">'
+    + '<div class="edc-question-label">' + question + '</div>'
+    + opts.map(function(o) {
+        return '<label class="edc-option"><input type="radio" name="' + name + '" value="' + o + '"> <span>' + o + '</span></label>';
+      }).join('')
+    + '</div>';
+}
+
+function makeCheckBlock(name, question, opts) {
+  return '<div class="edc-question-block">'
+    + '<div class="edc-question-label">' + question + '</div>'
+    + opts.map(function(o) {
+        var extra = o === 'Outro' ? ' id="edcOutroCheck"' : '';
+        return '<label class="edc-option"><input type="checkbox" name="' + name + '" value="' + o + '"' + extra + '> <span>' + o + '</span></label>';
+      }).join('')
+    + '<div class="edc-outro-wrap" id="edcOutroWrap" style="display:none">'
+    + '<input type="text" id="edcOutroText" class="edc-outro-input" placeholder="Descreva o desafio...">'
+    + '</div>'
+    + '</div>';
 }
 
 
